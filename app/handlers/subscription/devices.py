@@ -250,6 +250,9 @@ async def handle_change_devices(
             ),
         ).format(current_devices=current_devices)
 
+    if tariff and getattr(tariff, 'traffic_per_device_gb', 0) > 0 and getattr(subscription, 'traffic_limit_gb', 0) != 0:
+        prompt_text += f'\n\n🎁 <b>Бонусный трафик:</b> +{tariff.traffic_per_device_gb} ГБ за каждое дополнительное устройство!'
+
     # В мульти-тарифе кнопка "назад" ведёт к детальному виду подписки
     back_cb = f'sm:{sub_id}' if settings.is_multi_tariff_enabled() and sub_id else 'subscription_settings'
 
@@ -502,6 +505,13 @@ async def confirm_change_devices(
         cost=cost_text,
     )
 
+    if tariff and getattr(tariff, 'traffic_per_device_gb', 0) > 0 and getattr(subscription, 'traffic_limit_gb', 0) != 0:
+        added_gb = (new_devices_count - current_devices) * tariff.traffic_per_device_gb
+        if added_gb > 0:
+            confirm_text += f'\n\n🎁 <b>Изменение трафика:</b> +{added_gb} ГБ к лимиту!'
+        elif added_gb < 0:
+            confirm_text += f'\n\n📉 <b>Изменение трафика:</b> {added_gb} ГБ от лимита.'
+
     if devices_warning:
         confirm_text += devices_warning
 
@@ -680,6 +690,22 @@ async def execute_change_devices(
                 return
 
         subscription.device_limit = new_devices_count
+        added_traffic_gb = 0
+        if tariff and getattr(tariff, 'traffic_per_device_gb', 0) > 0 and getattr(subscription, 'traffic_limit_gb', 0) != 0:
+            devices_diff = new_devices_count - current_devices
+            added_traffic_gb = devices_diff * tariff.traffic_per_device_gb
+            current_limit = getattr(subscription, 'traffic_limit_gb', 0) or 0
+            new_traffic_limit = current_limit + added_traffic_gb
+            base_limit = getattr(tariff, 'traffic_limit_gb', 0) or 0
+            if base_limit > 0 and new_traffic_limit < base_limit:
+                added_traffic_gb = base_limit - current_limit
+                new_traffic_limit = base_limit
+            elif base_limit == 0 and new_traffic_limit < 1:
+                added_traffic_gb = 1 - current_limit
+                new_traffic_limit = 1
+            subscription.traffic_limit_gb = new_traffic_limit
+            logger.info('🎁 Обновлен лимит трафика при изменении количества устройств', old_limit=current_limit, new_limit=new_traffic_limit, diff=added_traffic_gb)
+
         subscription.updated_at = datetime.now(UTC)
 
         await db.commit()
@@ -762,6 +788,8 @@ async def execute_change_devices(
                 'DEVICE_CHANGE_RESULT_LINE',
                 '📱 Было: {old} → Стало: {new}\n',
             ).format(old=current_devices, new=new_devices_count)
+            if added_traffic_gb > 0:
+                success_text += f'🎁 Трафик увеличен: +{added_traffic_gb} ГБ (новый лимит: {subscription.traffic_limit_gb} ГБ)\n'
             if price > 0:
                 success_text += texts.t(
                     'DEVICE_CHANGE_CHARGED',
@@ -776,6 +804,8 @@ async def execute_change_devices(
                 'DEVICE_CHANGE_RESULT_LINE',
                 '📱 Было: {old} → Стало: {new}\n',
             ).format(old=current_devices, new=new_devices_count)
+            if added_traffic_gb != 0:
+                success_text += f'📉 Трафик изменен: {added_traffic_gb} ГБ (новый лимит: {subscription.traffic_limit_gb} ГБ)\n'
             if devices_reset_count > 0:
                 success_text += texts.t(
                     'DEVICE_CHANGE_DEVICES_REMOVED',

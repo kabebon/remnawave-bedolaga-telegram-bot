@@ -135,6 +135,7 @@ async def list_tariffs(
                 show_in_gift=tariff.show_in_gift,
                 traffic_limit_gb=tariff.traffic_limit_gb,
                 device_limit=tariff.device_limit,
+                traffic_per_device_gb=tariff.traffic_per_device_gb,
                 tier_level=tariff.tier_level,
                 display_order=tariff.display_order,
                 servers_count=len(tariff.allowed_squads or []),
@@ -244,6 +245,7 @@ async def get_tariff(
         max_topup_traffic_gb=tariff.max_topup_traffic_gb,
         traffic_limit_gb=tariff.traffic_limit_gb,
         device_limit=tariff.device_limit,
+        traffic_per_device_gb=tariff.traffic_per_device_gb,
         device_price_kopeks=tariff.device_price_kopeks,
         max_device_limit=tariff.max_device_limit,
         tier_level=tariff.tier_level,
@@ -305,6 +307,7 @@ async def create_new_tariff(
         max_topup_traffic_gb=request.max_topup_traffic_gb,
         traffic_limit_gb=request.traffic_limit_gb,
         device_limit=request.device_limit,
+        traffic_per_device_gb=request.traffic_per_device_gb,
         device_price_kopeks=request.device_price_kopeks,
         max_device_limit=request.max_device_limit,
         tier_level=request.tier_level,
@@ -381,6 +384,8 @@ async def update_existing_tariff(
         updates['traffic_limit_gb'] = request.traffic_limit_gb
     if request.device_limit is not None:
         updates['device_limit'] = request.device_limit
+    if request.traffic_per_device_gb is not None:
+        updates['traffic_per_device_gb'] = request.traffic_per_device_gb
     if request.device_price_kopeks is not None:
         updates['device_price_kopeks'] = request.device_price_kopeks
     if request.max_device_limit is not None:

@@ -1732,6 +1732,11 @@ async def _auto_add_devices(
 
     # Добавляем устройства (under lock)
     subscription.device_limit = new_device_limit
+    if tariff and getattr(tariff, 'traffic_per_device_gb', 0) > 0 and getattr(subscription, 'traffic_limit_gb', 0) != 0:
+        added_traffic = devices_to_add * tariff.traffic_per_device_gb
+        current_traffic_limit = getattr(subscription, 'traffic_limit_gb', 0) or 0
+        subscription.traffic_limit_gb = current_traffic_limit + added_traffic
+        logger.info('🎁 Автопокупка: добавлен бонусный трафик за устройства', added=added_traffic, new_limit=subscription.traffic_limit_gb)
 
     try:
         await db.commit()

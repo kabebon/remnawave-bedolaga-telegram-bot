@@ -578,6 +578,18 @@ async def create_paid_subscription(
     # This makes the bot/guest paths match the cabinet purchase flow. Scope still
     # narrow: an ACTIVE/LIMITED tariff falls through to the insert (its unique-index
     # "already active" handling); classic mode (tariff_id is None) creates fresh.
+    # Учитываем бонусный трафик за дополнительные устройства
+    if tariff_id is not None and traffic_limit_gb is not None and traffic_limit_gb > 0:
+        _dev_count = device_limit if device_limit is not None else settings.DEFAULT_DEVICE_LIMIT
+        if _dev_count > 1:
+            try:
+                from app.database.crud.tariff import get_tariff_by_id
+                _tariff_obj = await get_tariff_by_id(db, tariff_id)
+                if _tariff_obj and getattr(_tariff_obj, 'traffic_per_device_gb', 0) > 0 and _tariff_obj.traffic_limit_gb == traffic_limit_gb:
+                    traffic_limit_gb += (_dev_count - 1) * _tariff_obj.traffic_per_device_gb
+            except Exception as e:
+                logger.warning('Не удалось учесть traffic_per_device_gb при создании подписки', error=e)
+
     if not is_trial and tariff_id is not None and settings.is_multi_tariff_enabled():
         _existing = await get_subscription_by_user_and_tariff(db, user_id, tariff_id, include_inactive=True)
         if _existing is not None and _existing.status == SubscriptionStatus.EXPIRED.value:
@@ -1197,6 +1209,17 @@ async def extend_subscription(
             logger.info('🎓 Подписка конвертирована из триала в платную', subscription_id=subscription.id)
 
     if traffic_limit_gb is not None:
+        _effective_tariff = tariff_id or subscription.tariff_id
+        _dev_count = device_limit if device_limit is not None else (subscription.device_limit or 1)
+        if _effective_tariff and traffic_limit_gb > 0 and _dev_count > 1:
+            try:
+                from app.database.crud.tariff import get_tariff_by_id
+                _t_obj = await get_tariff_by_id(db, _effective_tariff)
+                if _t_obj and getattr(_t_obj, 'traffic_per_device_gb', 0) > 0 and _t_obj.traffic_limit_gb == traffic_limit_gb:
+                    traffic_limit_gb += (_dev_count - 1) * _t_obj.traffic_per_device_gb
+            except Exception as e:
+                logger.warning('Не удалось учесть traffic_per_device_gb при продлении подписки', error=e)
+
         old_traffic = subscription.traffic_limit_gb
         # Сброс использованного трафика: при смене тарифа — по настройке, при продлении — всегда
         if is_tariff_change:

@@ -57,6 +57,7 @@ class TariffListItem(BaseModel):
     show_in_gift: bool = True
     traffic_limit_gb: int
     device_limit: int
+    traffic_per_device_gb: int = 0
     tier_level: int
     display_order: int
     servers_count: int
@@ -88,6 +89,7 @@ class TariffDetailResponse(BaseModel):
     max_topup_traffic_gb: int = 0
     traffic_limit_gb: int
     device_limit: int
+    traffic_per_device_gb: int = 0
     device_price_kopeks: int | None = None
     max_device_limit: int | None = None
     tier_level: int
@@ -147,6 +149,7 @@ class TariffCreateRequest(BaseModel):
     max_topup_traffic_gb: int = Field(0, ge=0)
     traffic_limit_gb: int = Field(0, ge=0, description='0 = unlimited')
     device_limit: int = Field(1, ge=1)
+    traffic_per_device_gb: int = Field(0, ge=0, description='Доп. трафик за каждое докупленное устройство (ГБ)')
     device_price_kopeks: int | None = Field(None, ge=0)
     max_device_limit: int | None = Field(None, ge=1)
     tier_level: int = Field(1, ge=1, le=10)
@@ -189,6 +192,7 @@ class TariffUpdateRequest(BaseModel):
     max_topup_traffic_gb: int | None = Field(None, ge=0)
     traffic_limit_gb: int | None = Field(None, ge=0)
     device_limit: int | None = Field(None, ge=1)
+    traffic_per_device_gb: int | None = Field(None, ge=0)
     device_price_kopeks: int | None = Field(None, ge=0)
     max_device_limit: int | None = Field(None, ge=1)
     tier_level: int | None = Field(None, ge=1, le=10)

@@ -170,6 +170,7 @@ async def create_tariff(
     is_active: bool = True,
     traffic_limit_gb: int = 100,
     device_limit: int = 1,
+    traffic_per_device_gb: int = 0,
     device_price_kopeks: int | None = None,
     max_device_limit: int | None = None,
     allowed_squads: list[str] | None = None,
@@ -211,6 +212,7 @@ async def create_tariff(
         is_active=is_active,
         traffic_limit_gb=max(0, traffic_limit_gb),
         device_limit=max(1, device_limit),
+        traffic_per_device_gb=max(0, traffic_per_device_gb),
         device_price_kopeks=device_price_kopeks,
         max_device_limit=max_device_limit,
         allowed_squads=allowed_squads or [],
@@ -279,6 +281,7 @@ async def update_tariff(
     is_active: bool | None = None,
     traffic_limit_gb: int | None = None,
     device_limit: int | None = None,
+    traffic_per_device_gb: int | None = None,
     device_price_kopeks: int | None = ...,  # ... = не передан, None = сбросить
     max_device_limit: int | None = ...,  # ... = не передан, None = сбросить (без лимита)
     allowed_squads: list[str] | None = None,
@@ -324,6 +327,8 @@ async def update_tariff(
         tariff.traffic_limit_gb = max(0, traffic_limit_gb)
     if device_limit is not None:
         tariff.device_limit = max(1, device_limit)
+    if traffic_per_device_gb is not None:
+        tariff.traffic_per_device_gb = max(0, traffic_per_device_gb)
     if device_price_kopeks is not ...:
         # Если передан device_price_kopeks (включая None) - обновляем
         tariff.device_price_kopeks = device_price_kopeks
