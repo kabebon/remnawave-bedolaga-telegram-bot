@@ -1202,14 +1202,41 @@ class RemnaWaveWebhookService:
         changed = False
         grace_open = subscription.id in await get_open_grace_subscription_ids(db)
 
-        # Sync traffic limit
+        # Sync traffic limit. Squads-детект отличает «настоящий безлимит» от
+        # «traffic-limiter снял whitelist»: во втором случае панель шлёт
+        # trafficLimitBytes=0, но whitelist squad отсутствует в activeInternalSquads.
+        # Тогда НЕ обнуляем лимит тарифа (чтобы дисплеи не показывали ∞), а ставим
+        # флаг whitelist_blocked. Гейт: флаг ставим только для тарифов с лимитом
+        # трафика (traffic_limit_gb > 0) — безлимитные тарифы не должны получать флаг.
+        whitelist_uuid = settings.WHITELIST_SQUAD_UUID
+        squads_raw = data.get('activeInternalSquads') or []
+        squad_uuids = {s.get('uuid') if isinstance(s, dict) else s for s in squads_raw}
+        wl_removed = bool(whitelist_uuid) and whitelist_uuid not in squad_uuids
+
         traffic_limit_bytes = data.get('trafficLimitBytes')
         if traffic_limit_bytes is not None and not grace_open:
             try:
                 new_limit_gb = int(traffic_limit_bytes) // (1024**3)
-                if subscription.traffic_limit_gb != new_limit_gb:
-                    subscription.traffic_limit_gb = new_limit_gb
-                    changed = True
+                if new_limit_gb == 0 and wl_removed:
+                    # traffic-limiter снял whitelist (basic unlimited) → НЕ обнуляем
+                    # лимит тарифа; ставим флаг, только если у тарифа есть лимит трафика
+                    if subscription.traffic_limit_gb > 0 and not subscription.whitelist_blocked:
+                        subscription.whitelist_blocked = True
+                        changed = True
+                elif new_limit_gb == 0 and not wl_removed:
+                    # настоящий безлимитный тариф
+                    if subscription.traffic_limit_gb != 0:
+                        subscription.traffic_limit_gb = 0
+                        changed = True
+                else:
+                    if subscription.traffic_limit_gb != new_limit_gb:
+                        subscription.traffic_limit_gb = new_limit_gb
+                        changed = True
+                    # whitelist восстановлен (докупка/сброс подняли лимит,
+                    # traffic-limiter вернул squads) → снять флаг
+                    if subscription.whitelist_blocked and not wl_removed:
+                        subscription.whitelist_blocked = False
+                        changed = True
             except (ValueError, TypeError):
                 pass
 

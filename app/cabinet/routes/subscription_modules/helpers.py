@@ -223,6 +223,7 @@ def _subscription_to_response(
         is_active=is_active,
         is_expired=is_expired,
         is_limited=is_limited,
+        whitelist_blocked=getattr(subscription, 'whitelist_blocked', False),
         traffic_purchases=traffic_purchases or [],
         is_daily=is_daily,
         is_daily_paused=is_daily_paused,

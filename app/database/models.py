@@ -2277,6 +2277,11 @@ class Subscription(Base):
     )  # Приостановлена ли суточная подписка пользователем
     last_daily_charge_at = Column(AwareDateTime(), nullable=True)  # Время последнего суточного списания
 
+    # Whitelist (премиум-серверы) исчерпан — traffic-limiter снял whitelist squad.
+    # Чисто дисплеевый флаг: не влияет на продление/баланс/докупку.
+    # Ставится только для тарифов с лимитом трафика (traffic_limit_gb > 0).
+    whitelist_blocked = Column(Boolean, default=False, nullable=False, server_default='false')
+
     user = relationship('User', back_populates='subscriptions')
     tariff = relationship('Tariff', back_populates='subscriptions')
     discount_offers = relationship('DiscountOffer', back_populates='subscription')

@@ -238,6 +238,10 @@ class Settings(BaseSettings):
     GRACE_ACCESS_DURATION_HOURS: int = 72
     GRACE_ACCESS_EXPIRED_SQUAD_UUID: str = ''
     GRACE_ACCESS_LIMITED_SQUAD_UUID: str = ''
+    # UUID whitelist (премиум) squad — используется для squads-детекта в webhook
+    # user.modified: когда traffic-limiter снимает whitelist, бот отличает это от
+    # настоящего безлимита и ставит флаг whitelist_blocked вместо обнуления лимита.
+    WHITELIST_SQUAD_UUID: str = ''
     GRACE_ACCESS_TRAFFIC_GB: int = 1
     GRACE_ACCESS_TRIAL_ENABLED: bool = False
     GRACE_ACCESS_DAILY_ENABLED: bool = False

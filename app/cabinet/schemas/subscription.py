@@ -49,6 +49,9 @@ class SubscriptionData(BaseModel):
     is_active: bool
     is_expired: bool
     is_limited: bool = False
+    # Whitelist (премиум-серверы) исчерпан — traffic-limiter снял whitelist squad.
+    # Чисто дисплеевый флаг: подписка остаётся активной на basic-серверах.
+    whitelist_blocked: bool = False
     traffic_purchases: list[TrafficPurchaseInfo] = []
     # Daily tariff fields
     is_daily: bool = False

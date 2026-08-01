@@ -63,6 +63,10 @@ def _format_subscription_line(sub, idx: int) -> str:
         used = f'{sub.traffic_used_gb:.1f}' if sub.traffic_used_gb else '0'
         traffic = f'{used}/{sub.traffic_limit_gb} ГБ'
 
+    # Пометка о снятом whitelist (премиум исчерпан) в кратком виде списка
+    if getattr(sub, 'whitelist_blocked', False):
+        traffic = f'⚠️ Премиум отключён ({traffic})'
+
     # Devices
     devices = f'{Texts.format_device_limit(sub.device_limit)} устр.' if sub.device_limit is not None else ''
 
@@ -224,6 +228,15 @@ async def show_subscription_detail(
         f'📱 Устройства: {Texts.format_device_limit(subscription.device_limit)}\n'
         f'📅 До: {end_date}\n'
     )
+
+    # Whitelist (премиум-серверы) исчерпан — traffic-limiter снял whitelist squad.
+    # Подписка остаётся активной на basic-серверах, показываем отдельный блок.
+    if getattr(subscription, 'whitelist_blocked', False):
+        text += (
+            f'\n🟡 <b>Премиум-серверы:</b> отключены ({subscription.traffic_limit_gb}/{subscription.traffic_limit_gb} ГБ)\n'
+            f'🟢 <b>Обычные серверы:</b> работают (∞)\n'
+            f'<i>Лимит премиум-трафика исчерпан. Докупите трафик, чтобы вернуть премиум.</i>\n'
+        )
 
     if subscription.subscription_url and not settings.should_hide_subscription_link():
         text += f'\n🔗 <code>{subscription.subscription_url}</code>'
