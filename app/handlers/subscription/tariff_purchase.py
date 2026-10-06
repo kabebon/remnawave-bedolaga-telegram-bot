@@ -232,6 +232,8 @@ def get_tariffs_keyboard(
     tariffs: list[Tariff],
     language: str,
     purchased_tariff_ids: set[int] | None = None,
+    *,
+    show_comparison: bool = False,
 ) -> InlineKeyboardMarkup:
     """Создает компактную клавиатуру выбора тарифов (только названия)."""
     texts = get_texts(language)
@@ -250,6 +252,16 @@ def get_tariffs_keyboard(
         else:
             title = tariff.name
         buttons.append([InlineKeyboardButton(text=title, callback_data=f'tariff_select:{tariff.id}')])
+
+    if show_comparison and len(tariffs) >= 2:
+        buttons.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t('TARIFF_COMPARISON_BUTTON', '📊 Сравнить тарифы'),
+                    callback_data='tariff_compare',
+                )
+            ]
+        )
 
     buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data='back_to_menu')])
 
@@ -901,11 +913,57 @@ async def show_tariffs_list(
     # Формируем текст со списком тарифов и их характеристиками
     tariffs_text = format_tariffs_list_text(tariffs, db_user, has_period_discounts, purchased_tariff_ids)
 
+    from app.services.tariff_comparison import load_public_view
+
+    comparison = await load_public_view(db, tariffs, texts)
+    show_comparison = comparison.enabled
     await callback.message.edit_text(
         tariffs_text,
-        reply_markup=get_tariffs_keyboard(tariffs, db_user.language, purchased_tariff_ids),
+        reply_markup=get_tariffs_keyboard(
+            tariffs,
+            db_user.language,
+            purchased_tariff_ids,
+            show_comparison=show_comparison,
+        ),
     )
 
+    await callback.answer()
+
+
+@error_handler
+async def show_tariff_comparison(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+    state: FSMContext,
+):
+    """Таблица отличий по тем тарифам, которые этот человек вообще может купить."""
+    del state
+    texts = get_texts(db_user.language)
+    from app.services.tariff_comparison import load_public_view, render_telegram
+
+    promo_group_id = getattr(db_user, 'promo_group_id', None)
+    tariffs = await get_tariffs_for_user(db, promo_group_id)
+    view = await load_public_view(db, tariffs, texts)
+    if not view.enabled:
+        await callback.answer(texts.t('TARIFF_COMPARISON_EMPTY', 'Сравнение сейчас недоступно'), show_alert=True)
+        return
+
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text=texts.t('TARIFF_COMPARISON_BACK', '◀️ К тарифам'),
+                    callback_data='tariff_list',
+                )
+            ]
+        ]
+    )
+    await callback.message.edit_text(
+        render_telegram(view),
+        reply_markup=keyboard,
+        parse_mode='HTML',
+    )
     await callback.answer()
 
 
@@ -5733,6 +5791,7 @@ def register_tariff_purchase_handlers(dp: Dispatcher):
     # Список тарифов (для режима tariffs)
     dp.callback_query.register(show_tariffs_list, F.data == 'tariff_list')
     dp.callback_query.register(show_tariffs_list, F.data == 'buy_subscription_tariffs')
+    dp.callback_query.register(show_tariff_comparison, F.data == 'tariff_compare')
 
     # Выбор тарифа
     dp.callback_query.register(select_tariff, F.data.startswith('tariff_select:'))

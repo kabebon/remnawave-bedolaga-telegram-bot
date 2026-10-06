@@ -76,6 +76,7 @@ from .site_verification import router as site_verification_router
 from .subscription import router as subscription_router
 from .subscription_modules.multi_tariff import router as multi_tariff_subscription_router
 from .support_ws import router as support_ws_router
+from .tariff_comparison import router as tariff_comparison_router
 from .ticket_notifications import (
     admin_router as admin_ticket_notifications_router,
     router as ticket_notifications_router,
@@ -143,6 +144,7 @@ router.include_router(admin_tickets_router)
 router.include_router(admin_settings_router)
 router.include_router(admin_wheel_router)
 router.include_router(admin_tariffs_router)
+router.include_router(tariff_comparison_router)
 router.include_router(admin_servers_router)
 router.include_router(admin_stats_router)
 router.include_router(admin_referral_network_router)

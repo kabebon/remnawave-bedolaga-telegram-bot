@@ -7,12 +7,13 @@ monitoring_service затем спишет баланс и продлит под
 
 from __future__ import annotations
 
+import html
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 
 import structlog
 from aiogram import Bot
-from aiogram.types import InlineKeyboardMarkup
+from aiogram.types import InlineKeyboardMarkup, LinkPreviewOptions
 from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -24,7 +25,7 @@ from app.database.models import (
     User,
     UserPromoGroup,
 )
-from app.utils.miniapp_buttons import build_subscription_extend_button
+from app.utils.miniapp_buttons import build_miniapp_or_callback_button, build_subscription_extend_button
 
 
 logger = structlog.get_logger(__name__)
@@ -53,11 +54,43 @@ class _DailyGuard:
 _daily_guard = _DailyGuard()
 
 
+def projected_balance_kopeks(balance_kopeks: int, topup_kopeks: int, *, paid: bool) -> int:
+    """Баланс для текста уведомления.
+
+    Сообщение уходит сразу после ответа YooKassa, а вебхук зачисляет деньги
+    следом. Если списание уже прошло, показываем баланс после этого
+    пополнения, а не тот, что ещё лежит в строке пользователя.
+    """
+    if paid:
+        return balance_kopeks + topup_kopeks
+    return balance_kopeks
+
+
+def _topup_link_line(texts) -> str:
+    """Прямая ссылка на пополнение, если у кабинета задан адрес."""
+    from app.utils.miniapp_buttons import build_cabinet_url
+
+    url = build_cabinet_url('/balance/top-up')
+    if not url:
+        return ''
+    safe_url = html.escape(url, quote=True)
+    return '\n' + texts.t(
+        'RECURRENT_TOPUP_LINK',
+        '💳 <a href="{url}">Пополнить баланс</a>',
+    ).format(url=safe_url)
+
+
 def _build_extend_keyboard(texts, subscription_id: int | None = None) -> InlineKeyboardMarkup:
-    """Клавиатура с кнопкой продления подписки для уведомлений."""
+    """Продление и пополнение: после автосписания оба действия рядом."""
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [build_subscription_extend_button(texts.t('SUBSCRIPTION_EXTEND', '💎 Продлить подписку'), subscription_id)],
+            [
+                build_miniapp_or_callback_button(
+                    texts.t('BALANCE_TOPUP', '💳 Пополнить баланс'),
+                    callback_data='balance_topup',
+                )
+            ],
         ]
     )
 
@@ -382,10 +415,21 @@ async def _process_single_subscription(
                 payment_status = result.get('status', '')
                 if result.get('paid'):
                     keyboard = _build_extend_keyboard(texts, subscription.id)
+                    balance_after = projected_balance_kopeks(
+                        user.balance_kopeks,
+                        topup_amount_kopeks,
+                        paid=True,
+                    )
                     msg = texts.t(
                         'RECURRENT_TOPUP_SUCCESS',
-                        '✅ <b>Автоплатёж выполнен</b>\n\nБаланс пополнен на {amount} для продления подписки.',
-                    ).format(amount=settings.format_price(topup_amount_kopeks))
+                        '✅ <b>Автоплатёж выполнен</b>\n\n'
+                        'Баланс пополнен на {amount} для продления подписки.\n'
+                        '💰 Текущий баланс: {balance}',
+                    ).format(
+                        amount=settings.format_price(topup_amount_kopeks),
+                        balance=settings.format_price(balance_after),
+                    )
+                    msg += _topup_link_line(texts)
                     if settings.is_multi_tariff_enabled() and hasattr(subscription, 'tariff') and subscription.tariff:
                         msg += f'\n📦 Тариф: «{subscription.tariff.name}»'
                     await bot.send_message(
@@ -393,6 +437,7 @@ async def _process_single_subscription(
                         text=msg,
                         parse_mode='HTML',
                         reply_markup=keyboard,
+                        link_preview_options=LinkPreviewOptions(is_disabled=True),
                     )
                 elif payment_status == 'pending':
                     logger.info(
@@ -441,11 +486,13 @@ async def _process_single_subscription(
             ).format(amount=settings.format_price(topup_amount_kopeks))
             if settings.is_multi_tariff_enabled() and hasattr(subscription, 'tariff') and subscription.tariff:
                 msg += f'\n📦 Тариф: «{subscription.tariff.name}»'
+            msg += _topup_link_line(texts)
             await bot.send_message(
                 chat_id=user.telegram_id,
                 text=msg,
                 parse_mode='HTML',
                 reply_markup=keyboard,
+                link_preview_options=LinkPreviewOptions(is_disabled=True),
             )
         except Exception as notify_error:
             logger.warning('Ошибка уведомления о неудачном автоплатеже', notify_error=notify_error)
